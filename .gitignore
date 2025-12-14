@@ -39,8 +39,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Build outputs
-storagehub-card/dist/
+# Build outputs (keeping storagehub-card/dist/ for distribution)
 
 # OS
 .DS_Store
