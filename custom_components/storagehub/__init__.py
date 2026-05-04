@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import logging
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_API_KEY, CONF_HOST, Platform
+from homeassistant.const import CONF_API_KEY, CONF_HOST, CONF_VERIFY_SSL, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
@@ -40,7 +40,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: StorageHubConfigEntry) -> bool:
     """Set up StorageHub from a config entry."""
-    session = async_get_clientsession(hass)
+    session = async_get_clientsession(
+        hass, verify_ssl=entry.data.get(CONF_VERIFY_SSL, True)
+    )
     client = StorageHubApiClient(
         session=session,
         host=entry.data[CONF_HOST],

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from homeassistant import config_entries
-from homeassistant.const import CONF_API_KEY, CONF_HOST
+from homeassistant.const import CONF_API_KEY, CONF_HOST, CONF_VERIFY_SSL
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -42,7 +42,27 @@ async def test_user_flow_happy_path(
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "StorageHub"
-    assert result["data"] == {CONF_HOST: HOST, CONF_API_KEY: API_KEY}
+    assert result["data"] == {
+        CONF_HOST: HOST,
+        CONF_API_KEY: API_KEY,
+        CONF_VERIFY_SSL: True,
+    }
+
+
+async def test_user_flow_verify_ssl_off(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    _stub_ok(aioclient_mock)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {CONF_HOST: HOST, CONF_API_KEY: API_KEY, CONF_VERIFY_SSL: False},
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_VERIFY_SSL] is False
 
 
 async def test_user_flow_strips_trailing_slash(

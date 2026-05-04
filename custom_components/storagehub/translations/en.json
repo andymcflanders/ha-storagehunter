@@ -4,11 +4,13 @@
       "user": {
         "data": {
           "host": "Host URL",
-          "api_key": "API key"
+          "api_key": "API key",
+          "verify_ssl": "Verify SSL certificate"
         },
         "data_description": {
           "host": "Base URL of your StorageHub instance, e.g. https://storagehub.example.com",
-          "api_key": "API key with read and search scopes (starts with shub_)"
+          "api_key": "API key with read and search scopes (starts with shub_)",
+          "verify_ssl": "Turn off if StorageHub uses a self-signed certificate."
         }
       },
       "reauth_confirm": {
@@ -20,7 +22,11 @@
       "reconfigure": {
         "data": {
           "host": "Host URL",
-          "api_key": "API key"
+          "api_key": "API key",
+          "verify_ssl": "Verify SSL certificate"
+        },
+        "data_description": {
+          "verify_ssl": "Turn off if StorageHub uses a self-signed certificate."
         }
       }
     },

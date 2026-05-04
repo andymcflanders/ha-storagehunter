@@ -4,11 +4,13 @@
       "user": {
         "data": {
           "host": "Vert-URL",
-          "api_key": "API-nøkkel"
+          "api_key": "API-nøkkel",
+          "verify_ssl": "Verifiser SSL-sertifikat"
         },
         "data_description": {
           "host": "Grunn-URL til StorageHub-instansen din, f.eks. https://storagehub.example.com",
-          "api_key": "API-nøkkel med read- og search-tilgang (begynner med shub_)"
+          "api_key": "API-nøkkel med read- og search-tilgang (begynner med shub_)",
+          "verify_ssl": "Skru av hvis StorageHub bruker et selvsignert sertifikat."
         }
       },
       "reauth_confirm": {
@@ -20,7 +22,11 @@
       "reconfigure": {
         "data": {
           "host": "Vert-URL",
-          "api_key": "API-nøkkel"
+          "api_key": "API-nøkkel",
+          "verify_ssl": "Verifiser SSL-sertifikat"
+        },
+        "data_description": {
+          "verify_ssl": "Skru av hvis StorageHub bruker et selvsignert sertifikat."
         }
       }
     },

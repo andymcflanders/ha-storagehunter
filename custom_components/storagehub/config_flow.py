@@ -9,7 +9,7 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
-from homeassistant.const import CONF_API_KEY, CONF_HOST
+from homeassistant.const import CONF_API_KEY, CONF_HOST, CONF_VERIFY_SSL
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import (
@@ -27,6 +27,7 @@ _USER_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_HOST, default="http://storagehub.local"): str,
         vol.Required(CONF_API_KEY): str,
+        vol.Optional(CONF_VERIFY_SSL, default=True): bool,
     }
 )
 
@@ -44,8 +45,9 @@ class StorageHubConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             host = user_input[CONF_HOST].rstrip("/")
             api_key = user_input[CONF_API_KEY]
+            verify_ssl = user_input.get(CONF_VERIFY_SSL, True)
             try:
-                status = await self._validate(host, api_key)
+                status = await self._validate(host, api_key, verify_ssl)
             except CannotConnect:
                 errors["base"] = "cannot_connect"
             except InvalidAuth:
@@ -57,13 +59,13 @@ class StorageHubConfigFlow(ConfigFlow, domain=DOMAIN):
                 # instance_id is preferred (backend issue 3); host is the
                 # fallback while older builds don't return one.
                 await self.async_set_unique_id(status.instance_id or host)
-                self._abort_if_unique_id_configured(
-                    updates={CONF_HOST: host, CONF_API_KEY: api_key}
-                )
-                return self.async_create_entry(
-                    title=status.name,
-                    data={CONF_HOST: host, CONF_API_KEY: api_key},
-                )
+                entry_data = {
+                    CONF_HOST: host,
+                    CONF_API_KEY: api_key,
+                    CONF_VERIFY_SSL: verify_ssl,
+                }
+                self._abort_if_unique_id_configured(updates=entry_data)
+                return self.async_create_entry(title=status.name, data=entry_data)
         return self.async_show_form(
             step_id="user", data_schema=_USER_SCHEMA, errors=errors
         )
@@ -82,8 +84,9 @@ class StorageHubConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             host = entry.data[CONF_HOST]
             api_key = user_input[CONF_API_KEY]
+            verify_ssl = entry.data.get(CONF_VERIFY_SSL, True)
             try:
-                await self._validate(host, api_key)
+                await self._validate(host, api_key, verify_ssl)
             except CannotConnect:
                 errors["base"] = "cannot_connect"
             except InvalidAuth:
@@ -109,8 +112,9 @@ class StorageHubConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             host = user_input[CONF_HOST].rstrip("/")
             api_key = user_input[CONF_API_KEY]
+            verify_ssl = user_input.get(CONF_VERIFY_SSL, True)
             try:
-                status = await self._validate(host, api_key)
+                status = await self._validate(host, api_key, verify_ssl)
             except CannotConnect:
                 errors["base"] = "cannot_connect"
             except InvalidAuth:
@@ -125,7 +129,11 @@ class StorageHubConfigFlow(ConfigFlow, domain=DOMAIN):
                 self._abort_if_unique_id_mismatch(reason="instance_mismatch")
                 return self.async_update_reload_and_abort(
                     entry,
-                    data={CONF_HOST: host, CONF_API_KEY: api_key},
+                    data={
+                        CONF_HOST: host,
+                        CONF_API_KEY: api_key,
+                        CONF_VERIFY_SSL: verify_ssl,
+                    },
                 )
         return self.async_show_form(
             step_id="reconfigure",
@@ -133,14 +141,20 @@ class StorageHubConfigFlow(ConfigFlow, domain=DOMAIN):
                 {
                     vol.Required(CONF_HOST, default=entry.data[CONF_HOST]): str,
                     vol.Required(CONF_API_KEY): str,
+                    vol.Optional(
+                        CONF_VERIFY_SSL,
+                        default=entry.data.get(CONF_VERIFY_SSL, True),
+                    ): bool,
                 }
             ),
             errors=errors,
         )
 
-    async def _validate(self, host: str, api_key: str) -> SystemStatus:
+    async def _validate(
+        self, host: str, api_key: str, verify_ssl: bool
+    ) -> SystemStatus:
         """Confirm reachability and that the API key has read access."""
-        session = async_get_clientsession(self.hass)
+        session = async_get_clientsession(self.hass, verify_ssl=verify_ssl)
         client = StorageHubApiClient(session=session, host=host, api_key=api_key)
         status = await client.async_get_status()
         await client.async_get_stats()
