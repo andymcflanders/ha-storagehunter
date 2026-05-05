@@ -157,4 +157,5 @@ def _serialize_index_entry(entry: IndexEntry) -> dict[str, Any]:
         "container_name": entry.container_name,
         "location_name": entry.location_name,
         "ai_names": list(entry.ai_names),
+        "primary_image_url": entry.primary_image_url,
     }

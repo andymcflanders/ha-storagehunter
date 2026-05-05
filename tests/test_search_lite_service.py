@@ -44,6 +44,7 @@ def _index_payload() -> list[dict[str, Any]]:
             "container_name": "Kasse 1",
             "location_name": "Sportsbod",
             "ai_names": ["Blue Cord Pants"],
+            "primary_image_url": "/uploads/2026/05/abc.jpg",
         },
         {
             "id": "def",
@@ -52,6 +53,7 @@ def _index_payload() -> list[dict[str, Any]]:
             "container_name": None,
             "location_name": None,
             "ai_names": [],
+            "primary_image_url": None,
         },
     ]
 
@@ -108,6 +110,7 @@ async def test_search_lite_returns_cached_payload(
     assert first["id"] == "abc"
     assert first["owner_name"] == "Sverre"
     assert first["ai_names"] == ["Blue Cord Pants"]
+    assert first["primary_image_url"] == "/uploads/2026/05/abc.jpg"
     # Lite shape only — no description / value_estimate / etc.
     assert set(first.keys()) == {
         "id",
@@ -116,6 +119,7 @@ async def test_search_lite_returns_cached_payload(
         "container_name",
         "location_name",
         "ai_names",
+        "primary_image_url",
     }
 
 

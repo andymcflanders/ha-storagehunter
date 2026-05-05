@@ -125,6 +125,7 @@ class IndexEntry:
     container_name: str | None
     location_name: str | None
     ai_names: tuple[str, ...]
+    primary_image_url: str | None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> IndexEntry:
@@ -135,6 +136,7 @@ class IndexEntry:
             container_name=data.get("container_name"),
             location_name=data.get("location_name"),
             ai_names=tuple(data.get("ai_names") or ()),
+            primary_image_url=data.get("primary_image_url"),
         )
 
 

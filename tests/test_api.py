@@ -192,6 +192,7 @@ _INDEX_BODY = [
         "container_name": "Kasse 1",
         "location_name": "Sportsbod",
         "ai_names": ["Blue Cord Pants", "Blå Cordbukser"],
+        "primary_image_url": "/uploads/2026/05/abc.jpg",
     },
     {
         "id": "def",
@@ -200,6 +201,7 @@ _INDEX_BODY = [
         "container_name": None,
         "location_name": None,
         "ai_names": [],
+        "primary_image_url": None,
     },
 ]
 
@@ -251,9 +253,11 @@ async def test_get_index_parses_entries(
     assert first.id == "abc"
     assert first.owner_name == "Sverre"
     assert first.ai_names == ("Blue Cord Pants", "Blå Cordbukser")
+    assert first.primary_image_url == "/uploads/2026/05/abc.jpg"
     assert second.owner_name is None
     assert second.container_name is None
     assert second.ai_names == ()
+    assert second.primary_image_url is None
 
 
 async def test_get_index_invalid_auth(
