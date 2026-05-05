@@ -168,17 +168,55 @@ async def test_voice_no_results(
     assert speech == "I couldn't find a foobar in your inventory."
 
 
-async def test_voice_multi_result_summary(
+async def test_voice_multi_one_location_dominant_box(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ) -> None:
+    """All matches in the same location, mostly in one box."""
     await _setup_full(hass, aioclient_mock)
     aioclient_mock.get(
         f"{HOST}/api/ha/search/semantic",
         json={
             "items": [
-                _item(name="red jacket", container_name="Winter"),
-                _item(name="blue jacket", container_name="Summer"),
-                _item(name="green jacket", container_name="Spring"),
+                _item(
+                    name="red jacket", container_name="Winter", location_name="Attic"
+                ),
+                _item(
+                    name="blue jacket", container_name="Winter", location_name="Attic"
+                ),
+                _item(
+                    name="green jacket", container_name="Winter", location_name="Attic"
+                ),
+                _item(
+                    name="yellow jacket", container_name="Summer", location_name="Attic"
+                ),
+            ],
+            "total_count": 4,
+            "query": "jacket",
+        },
+    )
+
+    speech = await _say(hass, "find jacket")
+    assert speech == "All 4 matches are in the Winter box in the Attic."
+
+
+async def test_voice_multi_one_location_spread_across_boxes(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """All matches in same location, no single dominant box."""
+    await _setup_full(hass, aioclient_mock)
+    aioclient_mock.get(
+        f"{HOST}/api/ha/search/semantic",
+        json={
+            "items": [
+                _item(
+                    name="red jacket", container_name="Winter", location_name="Attic"
+                ),
+                _item(
+                    name="blue jacket", container_name="Summer", location_name="Attic"
+                ),
+                _item(
+                    name="green jacket", container_name="Spring", location_name="Attic"
+                ),
             ],
             "total_count": 3,
             "query": "jacket",
@@ -186,7 +224,75 @@ async def test_voice_multi_result_summary(
     )
 
     speech = await _say(hass, "find jacket")
-    assert speech == "I found 3 matches: red jacket and blue jacket, and 1 more."
+    assert speech == "All 3 matches are in the Attic, across several boxes."
+
+
+async def test_voice_multi_dominant_location(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Most matches in one location, a few elsewhere."""
+    await _setup_full(hass, aioclient_mock)
+    aioclient_mock.get(
+        f"{HOST}/api/ha/search/semantic",
+        json={
+            "items": [
+                _item(name="a", container_name="A", location_name="Attic"),
+                _item(name="b", container_name="B", location_name="Attic"),
+                _item(name="c", container_name="C", location_name="Attic"),
+                _item(name="d", container_name="D", location_name="Garage"),
+            ],
+            "total_count": 4,
+            "query": "stuff",
+        },
+    )
+
+    speech = await _say(hass, "find stuff")
+    assert speech == "Mostly in the Attic; the rest in the Garage."
+
+
+async def test_voice_multi_spread_across_locations(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """No location dominates — list the top few."""
+    await _setup_full(hass, aioclient_mock)
+    aioclient_mock.get(
+        f"{HOST}/api/ha/search/semantic",
+        json={
+            "items": [
+                _item(name="a", container_name="A", location_name="Attic"),
+                _item(name="b", container_name="B", location_name="Garage"),
+                _item(name="c", container_name="C", location_name="Basement"),
+            ],
+            "total_count": 3,
+            "query": "stuff",
+        },
+    )
+
+    speech = await _say(hass, "find stuff")
+    assert speech == "Spread across Attic, Garage and Basement."
+
+
+async def test_voice_multi_norwegian_aggregation(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Norwegian dominant-location template + 'og' conjunction."""
+    await _setup_full(hass, aioclient_mock)
+    aioclient_mock.get(
+        f"{HOST}/api/ha/search/semantic",
+        json={
+            "items": [
+                _item(name="a", container_name="A", location_name="Loftet"),
+                _item(name="b", container_name="B", location_name="Loftet"),
+                _item(name="c", container_name="C", location_name="Loftet"),
+                _item(name="d", container_name="D", location_name="Garasjen"),
+            ],
+            "total_count": 4,
+            "query": "klær",
+        },
+    )
+
+    speech = await _say(hass, "finn klær", language="no")
+    assert speech == "Stort sett på Loftet; resten på Garasjen."
 
 
 async def test_voice_multi_same_container_picks_top(

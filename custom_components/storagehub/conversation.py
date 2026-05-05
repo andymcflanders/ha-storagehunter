@@ -9,6 +9,7 @@ itself.
 
 from __future__ import annotations
 
+from collections import Counter
 import logging
 from typing import TYPE_CHECKING
 
@@ -17,7 +18,13 @@ from homeassistant.components.conversation import get_agent_manager
 from homeassistant.components.conversation.models import ConversationInput
 from homeassistant.core import HomeAssistant, callback
 
-from .api import CannotConnect, InvalidAuth, SearchResult, StorageHubError
+from .api import (
+    CannotConnect,
+    InvalidAuth,
+    SearchResult,
+    SearchResultItem,
+    StorageHubError,
+)
 from .const import DOMAIN
 
 if TYPE_CHECKING:
@@ -46,8 +53,10 @@ _TEMPLATES_EN: dict[str, str] = {
     "found_with_owner": "{owner}'s {name} is in the {container} box in the {location}.",
     "found": "The {name} is in the {container} box in the {location}.",
     "found_no_container": "The {name} is in the {location}.",
-    "found_multi": "I found {count} matches: {first} and {second}{more}.",
-    "found_multi_more": ", and {n} more",
+    "multi_one_loc_one_box": "All {count} matches are in the {container} box in the {location}.",
+    "multi_one_loc_spread": "All {count} matches are in the {location}, across several boxes.",
+    "multi_dominant_loc": "Mostly in the {location}; the rest in the {other}.",
+    "multi_spread": "Spread across {locations}.",
     "no_results": "I couldn't find a {item} in your inventory.",
     "error_cannot_connect": "I couldn't reach StorageHub.",
     "error_auth": "StorageHub rejected my API key. Please reconfigure the integration.",
@@ -59,8 +68,10 @@ _TEMPLATES_NO: dict[str, str] = {
     "found_with_owner": "{owner}s {name} ligger i boksen {container} på {location}.",
     "found": "{name} ligger i boksen {container} på {location}.",
     "found_no_container": "{name} ligger på {location}.",
-    "found_multi": "Jeg fant {count} treff: {first} og {second}{more}.",
-    "found_multi_more": ", og {n} til",
+    "multi_one_loc_one_box": "Alle {count} treff ligger i boksen {container} på {location}.",
+    "multi_one_loc_spread": "Alle {count} treff ligger på {location}, fordelt på flere bokser.",
+    "multi_dominant_loc": "Stort sett på {location}; resten på {other}.",
+    "multi_spread": "Fordelt på {locations}.",
     "no_results": "Jeg fant ingen {item} i inventaret.",
     "error_cannot_connect": "Jeg når ikke StorageHub.",
     "error_auth": "StorageHub avviste API-nøkkelen. Rekonfigurer integrasjonen.",
@@ -106,31 +117,22 @@ def _format_response(
     items = result.items
     top = items[0]
 
-    # Multi-result summary triggers if matches diverge on container, or
-    # if there are too many to make a confident pick. Otherwise the top
-    # result is good enough — same-container matches all answer the
-    # "where is X" question identically.
-    summarize = result.total_count > 5 or (
-        len(items) >= 2 and items[0].container_name != items[1].container_name
-    )
+    # Single-result fallthrough: only one item, or every sampled item shares
+    # the top item's container — they all answer the "where is X" question
+    # identically, so just speak the top result.
+    if len(items) <= 1 or all(it.container_name == top.container_name for it in items):
+        return _render_single(top, item_text, templates)
 
-    if summarize and len(items) >= 2:
-        more_count = result.total_count - 2
-        more = (
-            templates["found_multi_more"].format(n=more_count) if more_count > 0 else ""
-        )
-        return templates["found_multi"].format(
-            count=result.total_count,
-            first=items[0].name,
-            second=items[1].name,
-            more=more,
-        )
+    return _render_aggregate(result, templates, language)
 
+
+def _render_single(
+    top: SearchResultItem, item_text: str, templates: dict[str, str]
+) -> str:
     container = top.container_name
     location = top.location_name or "an unknown location"
     if not container:
         return templates["found_no_container"].format(name=top.name, location=location)
-
     if top.owner_name and _query_mentions_owner(item_text, top.owner_name):
         return templates["found_with_owner"].format(
             owner=top.owner_name,
@@ -138,10 +140,75 @@ def _format_response(
             container=container,
             location=location,
         )
-
     return templates["found"].format(
         name=top.name, container=container, location=location
     )
+
+
+def _render_aggregate(
+    result: SearchResult, templates: dict[str, str], language: str | None
+) -> str:
+    """Summarise multi-item results by *where they live*, not by listing names.
+
+    Three buckets:
+      - All sampled items in one location → mention dominant box if any
+      - One location dominates (>60%) → "mostly in X; the rest in Y"
+      - Spread → list top 2-3 locations
+
+    The voice client requests up to 20 items, so for typical voice queries
+    the sampled set is the full set; the aggregation is exact. For larger
+    result sets we still pick the right bucket from the sample and phrase
+    in a way that doesn't claim more certainty than we have.
+    """
+    items = result.items
+    location_counts = Counter(it.location_name for it in items if it.location_name)
+    sample_size = len(items)
+
+    # Defensive: no usable location info at all → fall back to top item.
+    if not location_counts:
+        return _render_single(items[0], "", templates)
+
+    top_loc, top_loc_count = location_counts.most_common(1)[0]
+    full_set = result.total_count == sample_size
+
+    # Bucket 1: every sampled item lives in the top location.
+    if top_loc_count == sample_size and full_set:
+        containers = Counter(it.container_name for it in items if it.container_name)
+        if containers:
+            top_container, top_container_count = containers.most_common(1)[0]
+            if top_container_count > sample_size / 2:
+                return templates["multi_one_loc_one_box"].format(
+                    count=result.total_count,
+                    container=top_container,
+                    location=top_loc,
+                )
+        return templates["multi_one_loc_spread"].format(
+            count=result.total_count, location=top_loc
+        )
+
+    # Bucket 2: one location dominates (>60% of sample).
+    if top_loc_count / sample_size > 0.6:
+        other_locs = [loc for loc, _ in location_counts.most_common() if loc != top_loc]
+        # other_locs is non-empty here because we're not in bucket 1.
+        return templates["multi_dominant_loc"].format(
+            location=top_loc, other=other_locs[0]
+        )
+
+    # Bucket 3: spread across multiple locations.
+    top_locs = [loc for loc, _ in location_counts.most_common(3)]
+    return templates["multi_spread"].format(
+        locations=_join_locations(top_locs, language)
+    )
+
+
+def _join_locations(locs: list[str], language: str | None) -> str:
+    """Render a 1-3 location list with the right conjunction."""
+    if not locs:
+        return ""
+    if len(locs) == 1:
+        return locs[0]
+    conj = "og" if language and language.lower().startswith("no") else "and"
+    return ", ".join(locs[:-1]) + f" {conj} " + locs[-1]
 
 
 _REGISTERED_KEY = f"{DOMAIN}_conversation_registered"
@@ -190,7 +257,10 @@ def _build_handler(hass: HomeAssistant):
 
         data: StorageHubData = entries[0].runtime_data
         try:
-            search_result = await data.client.async_semantic_search(item_text, limit=5)
+            # Limit 20 — multi-item aggregation needs enough sample to detect
+            # location dominance. For typical voice queries this is the full
+            # result set, making the aggregation exact rather than estimated.
+            search_result = await data.client.async_semantic_search(item_text, limit=20)
         except InvalidAuth:
             return templates["error_auth"]
         except CannotConnect:
