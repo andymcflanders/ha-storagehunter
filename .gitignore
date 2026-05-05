@@ -40,6 +40,8 @@ yarn-debug.log*
 yarn-error.log*
 
 # Build outputs (keeping storagehub-card/dist/ for distribution)
+!storagehub-card/dist/
+!storagehub-card/dist/**
 
 # OS
 .DS_Store
