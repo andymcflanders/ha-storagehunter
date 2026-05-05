@@ -18,9 +18,10 @@ should require a database migration.
 | 1 | Add owner to `/api/ha/search` matching | High | Voice queries with possessive ("Sverre's …") |
 | 2 | New `GET /api/ha/items/index` lite endpoint | High | Card's instant as-you-type filter |
 | 3 | Add `instance_id` to `/api/ha/status` | Low | HA `unique_id` stability across host changes |
-| 4 | New `GET /api/ha/search/semantic` embedding-based endpoint | Medium | Card "Smart matches" actually being smart; voice queries that don't share substrings with indexed text |
+| 4 | New `GET /api/ha/search/semantic` synonym-aware endpoint | Medium | Card "Smart matches" finding items behind synonym gaps |
+| 5 | Add `primary_image_url` to `/api/ha/items/index` | Medium | Card thumbnails next to local search results |
 
-**Status (2026-05-05):** issues 1, 2, 3 shipped and verified end-to-end against the HA integration's Phase 0–3 surface. Issue 4 is open.
+**Status (2026-05-05):** issues 1–4 shipped and verified end-to-end against the HA integration's Phase 0–3 surface. Issue 5 is open.
 
 ---
 
@@ -277,6 +278,80 @@ proper vector index can come later.
 
 ---
 
+## Issue 5 — Add `primary_image_url` to `/api/ha/items/index`
+
+**Where:** `backend/app/api/homeassistant.py`, the `items_index`
+handler that ships the lite item index.
+
+**Problem:** The HA Lovelace card wants a small thumbnail next to
+each row. The semantic search response (and the legacy
+`/api/ha/items`) already returns `primary_image_url`, so card rows
+sourced from `storagehub.search` / `storagehub.semantic_search` can
+render thumbs today. The lite index, used for instant local
+filtering on every keystroke, doesn't include any image reference —
+so local-hit rows would be thumb-less while semantic-hit rows show
+photos. Inconsistent UX is worse than no thumbs at all.
+
+The lite-index spec (issue 2) deliberately excluded image URLs to
+keep payload tight: *"No image URLs, no tag arrays, no descriptions
+— keep it tight."* That was right when nobody knew what the card
+needed; with the card now in users' hands, image URLs are the one
+field worth re-adding.
+
+**Suggested change:** Add `primary_image_url: str | None` to each
+entry in the lite index payload. Same value the existing
+`/api/ha/items` and `/api/ha/search` endpoints already compute via
+`_item_to_summary`'s `primary_image_url` resolution — pull it out
+into a small helper and call it from `items_index` too.
+
+```python
+# rough sketch
+[
+  {
+    "id": "uuid",
+    "name": "Red wool cardigan",
+    "owner_name": "Sverre",
+    "container_name": "Winter Box",
+    "location_name": "Attic",
+    "ai_names": ["Rød ullgenser"],
+    "primary_image_url": "/uploads/2026/05/abc.jpg"   // or null
+  },
+  ...
+]
+```
+
+The card joins `primary_image_url` against `storagehub_url`
+(card-side config) to produce an absolute URL, so backend keeps
+returning the relative path it already returns elsewhere — same
+shape as `_item_to_summary`.
+
+**Acceptance criteria:**
+
+- `GET /api/ha/items/index` returns each entry with
+  `primary_image_url` (relative path string or `null`).
+- For an item with no images, the field is `null` — not `""`,
+  not omitted.
+- The ETag changes when an item's `primary_image_id` changes.
+  Already true if the ETag is `MAX(updated_at)` across `items`
+  (mutating an item bumps `updated_at`); call out if your ETag
+  is computed differently and an image change would slip through.
+- Wire size for a 10k-item inventory stays under the original
+  200 KB gzipped budget. Image URLs are ~80 bytes each, so the
+  worst case adds ~80 KB raw / ~12 KB gzipped — comfortable.
+- 4xx unchanged — same auth/scope rules as before.
+
+**Note on join cost:** the existing index query LEFT JOINs
+`item → container → location` and `item → user`. Adding
+`primary_image_url` requires either a fourth LEFT JOIN to a
+`primary_image` lookup, or computing the URL from
+`Item.primary_image_id` + a separate Image lookup. If the existing
+`/api/ha/search` already includes the image URL via
+`selectinload(Item.images)`, mirroring that pattern in `items_index`
+is the path of least surprise. The lite endpoint can afford the
+extra join — it's polled every 30 minutes, not per keystroke.
+
+---
+
 ## What's intentionally NOT on this list
 
 - **Triage / outgrown / owner-suggestion endpoints in `/api/ha/*`.**
@@ -317,4 +392,8 @@ curl -H "X-API-Key: shub_..." \
 curl -H "X-API-Key: shub_..." \
      "http://storagehub.local/api/ha/search/semantic?q=genser"
 # → cardigans / knit tops, even though no field contains "genser"
+
+# Issue 5
+curl -H "X-API-Key: shub_..." http://storagehub.local/api/ha/items/index | jq '.[0]'
+# → {"id":"...", "name":"...", ..., "primary_image_url":"/uploads/..."}
 ```
