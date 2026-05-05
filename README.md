@@ -27,11 +27,11 @@ A Home Assistant custom integration for [StorageHub](https://github.com/youruser
 
 ### Frontend Card
 
-The card is included in `storagehub-card/dist/storagehub-card.js`. Add it as a Lovelace resource:
-
-1. Go to **Settings** → **Dashboards** → **Resources**
-2. Add resource: `/local/storagehub-card.js` (copy the file to `config/www/`)
-3. Or use HACS Frontend to install the card separately
+The Lovelace card lives in its own repo:
+[**andymcflanders/storagehub-card**](https://github.com/andymcflanders/storagehub-card).
+Install it through HACS as a *Dashboard* type custom repository
+(separate from the integration). The repo's README has full setup
+instructions.
 
 ## Configuration
 

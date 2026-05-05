@@ -15,10 +15,14 @@ needs to land in parallel.
 
 ## Current phase
 
-**Phase 0 — skeleton.** Heartbeat coordinator, `total_items` sensor,
-`connected` binary sensor, config flow with reauth + reconfigure.
-No search, no card, no voice yet — those are phases 1, 3, and 2
-respectively.
+**Phases 0–3 shipped.** Skeleton + search service + voice intent +
+lite-index coordinator + Lovelace card all live. Backend issues
+1–5 are all in. Phase 4 (polish: reauth/reconfigure end-to-end,
+HACS validation, README rewrite) is the open work.
+
+The Lovelace card lives in its own repo:
+**[andymcflanders/storagehub-card](https://github.com/andymcflanders/storagehub-card)**.
+This repo is integration-only.
 
 ## Project structure
 
@@ -27,26 +31,31 @@ ha-storagehunters/
 ├── PLAN.md                            # Phased rebuild plan
 ├── BACKEND_REQUIREMENTS.md            # Backend issue list
 ├── custom_components/storagehub/
-│   ├── __init__.py                    # Entry setup, runtime_data, platforms
+│   ├── __init__.py                    # Setup + runtime_data + platforms
 │   ├── manifest.json
-│   ├── const.py                       # Domain, intervals, endpoints
+│   ├── const.py
 │   ├── api.py                         # Async API client + dataclasses
-│   ├── coordinator.py                 # HeartbeatCoordinator
+│   ├── coordinator.py                 # Heartbeat + Index coordinators
 │   ├── config_flow.py                 # user / reauth / reconfigure
-│   ├── sensor.py                      # total_items
+│   ├── sensor.py                      # total_items + diagnostic ETag
 │   ├── binary_sensor.py               # connected
+│   ├── services.py                    # search / semantic_search / search_lite / refresh_index
+│   ├── services.yaml
+│   ├── conversation.py                # HA Assist trigger
 │   ├── strings.json
 │   └── translations/{en,no}.json
 ├── tests/
 │   ├── conftest.py
 │   ├── test_api.py
-│   └── test_config_flow.py
+│   ├── test_config_flow.py
+│   ├── test_coordinator.py
+│   ├── test_search_service.py
+│   ├── test_search_lite_service.py
+│   └── test_conversation.py
 ├── requirements_test.txt
+├── pytest.ini
 └── hacs.json
 ```
-
-The Lovelace card under `storagehub-card/` and search/voice services
-land in later phases.
 
 ## StorageHub API endpoints used in phase 0
 
