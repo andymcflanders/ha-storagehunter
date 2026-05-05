@@ -103,7 +103,7 @@ async def test_voice_happy_path_with_owner_en(
 ) -> None:
     await _setup_full(hass, aioclient_mock)
     aioclient_mock.get(
-        f"{HOST}/api/ha/search",
+        f"{HOST}/api/ha/search/semantic",
         json={
             "items": [_item(name="rain jacket", owner_name="Sverre")],
             "total_count": 1,
@@ -123,7 +123,7 @@ async def test_voice_happy_path_no_owner_en(
 ) -> None:
     await _setup_full(hass, aioclient_mock)
     aioclient_mock.get(
-        f"{HOST}/api/ha/search",
+        f"{HOST}/api/ha/search/semantic",
         json={"items": [_item()], "total_count": 1, "query": "yellow jacket"},
     )
 
@@ -136,7 +136,7 @@ async def test_voice_norwegian_possessive(
 ) -> None:
     await _setup_full(hass, aioclient_mock)
     aioclient_mock.get(
-        f"{HOST}/api/ha/search",
+        f"{HOST}/api/ha/search/semantic",
         json={
             "items": [
                 _item(
@@ -160,7 +160,7 @@ async def test_voice_no_results(
 ) -> None:
     await _setup_full(hass, aioclient_mock)
     aioclient_mock.get(
-        f"{HOST}/api/ha/search",
+        f"{HOST}/api/ha/search/semantic",
         json={"items": [], "total_count": 0, "query": "foobar"},
     )
 
@@ -173,7 +173,7 @@ async def test_voice_multi_result_summary(
 ) -> None:
     await _setup_full(hass, aioclient_mock)
     aioclient_mock.get(
-        f"{HOST}/api/ha/search",
+        f"{HOST}/api/ha/search/semantic",
         json={
             "items": [
                 _item(name="red jacket", container_name="Winter"),
@@ -194,7 +194,7 @@ async def test_voice_multi_same_container_picks_top(
 ) -> None:
     await _setup_full(hass, aioclient_mock)
     aioclient_mock.get(
-        f"{HOST}/api/ha/search",
+        f"{HOST}/api/ha/search/semantic",
         json={
             "items": [
                 _item(name="red jacket", container_name="Winter"),
@@ -214,7 +214,7 @@ async def test_voice_cannot_connect(
 ) -> None:
     await _setup_full(hass, aioclient_mock)
     aioclient_mock.get(
-        f"{HOST}/api/ha/search", exc=aiohttp.ClientConnectionError("boom")
+        f"{HOST}/api/ha/search/semantic", exc=aiohttp.ClientConnectionError("boom")
     )
 
     speech = await _say(hass, "where is the bike")
@@ -225,7 +225,7 @@ async def test_voice_invalid_auth(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ) -> None:
     await _setup_full(hass, aioclient_mock)
-    aioclient_mock.get(f"{HOST}/api/ha/search", status=401)
+    aioclient_mock.get(f"{HOST}/api/ha/search/semantic", status=401)
 
     speech = await _say(hass, "where is the bike")
     assert (

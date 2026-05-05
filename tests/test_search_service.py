@@ -86,6 +86,49 @@ async def _setup_only(hass: HomeAssistant) -> None:
 async def test_service_registered_after_setup(hass: HomeAssistant) -> None:
     await _setup_only(hass)
     assert hass.services.has_service(DOMAIN, "search")
+    assert hass.services.has_service(DOMAIN, "semantic_search")
+
+
+async def test_semantic_search_happy_path(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    await _setup_integration(hass, aioclient_mock)
+    aioclient_mock.get(
+        f"{HOST}/api/ha/search/semantic", json=_search_payload(query="genser")
+    )
+
+    response = await hass.services.async_call(
+        DOMAIN,
+        "semantic_search",
+        {"query": "genser"},
+        blocking=True,
+        return_response=True,
+    )
+
+    assert response is not None
+    assert response["total_count"] == 1
+    assert response["query"] == "genser"
+    request = aioclient_mock.mock_calls[-1]
+    assert request[1].path == "/api/ha/search/semantic"
+    assert request[1].query["q"] == "genser"
+
+
+async def test_semantic_search_auth_failure(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    await _setup_integration(hass, aioclient_mock)
+    aioclient_mock.get(f"{HOST}/api/ha/search/semantic", status=401)
+
+    with pytest.raises(HomeAssistantError) as exc_info:
+        await hass.services.async_call(
+            DOMAIN,
+            "semantic_search",
+            {"query": "valid"},
+            blocking=True,
+            return_response=True,
+        )
+
+    assert exc_info.value.translation_key == "auth_failed"
 
 
 async def test_search_happy_path(

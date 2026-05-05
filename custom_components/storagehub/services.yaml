@@ -15,6 +15,23 @@ search:
           max: 50
           mode: box
 
+semantic_search:
+  fields:
+    query:
+      required: true
+      example: "Marte genser"
+      selector:
+        text:
+    limit:
+      required: false
+      default: 20
+      example: 10
+      selector:
+        number:
+          min: 1
+          max: 50
+          mode: box
+
 search_lite:
 
 refresh_index:

@@ -190,7 +190,7 @@ def _build_handler(hass: HomeAssistant):
 
         data: StorageHubData = entries[0].runtime_data
         try:
-            search_result = await data.client.async_search(item_text, limit=5)
+            search_result = await data.client.async_semantic_search(item_text, limit=5)
         except InvalidAuth:
             return templates["error_auth"]
         except CannotConnect:

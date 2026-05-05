@@ -72,6 +72,20 @@
         }
       }
     },
+    "semantic_search": {
+      "name": "Search inventory (smart)",
+      "description": "Search StorageHub with synonym expansion and owner pre-filter — 'genser' will find items literally named 'cardigan', and 'Marte genser' scopes to Marte's items.",
+      "fields": {
+        "query": {
+          "name": "Query",
+          "description": "Free-text search. Synonyms are expanded automatically; owner names AND-filter the results."
+        },
+        "limit": {
+          "name": "Limit",
+          "description": "Maximum number of items to return (1–50)."
+        }
+      }
+    },
     "search_lite": {
       "name": "Get cached item index",
       "description": "Returns the cached lightweight item index used by the StorageHub Lovelace card for client-side filtering."

@@ -9,7 +9,14 @@ from typing import Any
 
 import aiohttp
 
-from .const import API_INDEX, API_SEARCH, API_STATS, API_STATUS, DEFAULT_TIMEOUT
+from .const import (
+    API_INDEX,
+    API_SEARCH,
+    API_SEARCH_SEMANTIC,
+    API_STATS,
+    API_STATUS,
+    DEFAULT_TIMEOUT,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -161,6 +168,19 @@ class StorageHubApiClient:
     async def async_search(self, query: str, limit: int = 20) -> SearchResult:
         data = await self._request(
             "GET", API_SEARCH, params={"q": query, "limit": limit}
+        )
+        return SearchResult.from_dict(data)
+
+    async def async_semantic_search(self, query: str, limit: int = 20) -> SearchResult:
+        """Synonym-expanded search with backend owner pre-filter.
+
+        Same response shape as `async_search` but routed through the
+        backend's /api/ha/search/semantic endpoint. Use this for voice
+        and the card's "Smart matches" path; keep the substring
+        endpoint for direct automations that want strict matching.
+        """
+        data = await self._request(
+            "GET", API_SEARCH_SEMANTIC, params={"q": query, "limit": limit}
         )
         return SearchResult.from_dict(data)
 

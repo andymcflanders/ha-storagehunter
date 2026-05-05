@@ -72,6 +72,20 @@
         }
       }
     },
+    "semantic_search": {
+      "name": "Søk i inventar (smart)",
+      "description": "Søk i StorageHub med synonymer og eierfilter — «genser» finner ting som heter «cardigan», og «Marte genser» avgrenser til Martes ting.",
+      "fields": {
+        "query": {
+          "name": "Søk",
+          "description": "Fritekstsøk. Synonymer utvides automatisk; eiernavn brukes som AND-filter."
+        },
+        "limit": {
+          "name": "Maks treff",
+          "description": "Maks antall ting å returnere (1–50)."
+        }
+      }
+    },
     "search_lite": {
       "name": "Hent hurtigbufret inventarindeks",
       "description": "Returnerer den hurtigbufrede lette inventarindeksen som StorageHub-Lovelace-kortet bruker til klient-side-filtrering."

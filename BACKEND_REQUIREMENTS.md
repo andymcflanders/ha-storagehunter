@@ -18,6 +18,9 @@ should require a database migration.
 | 1 | Add owner to `/api/ha/search` matching | High | Voice queries with possessive ("Sverre's …") |
 | 2 | New `GET /api/ha/items/index` lite endpoint | High | Card's instant as-you-type filter |
 | 3 | Add `instance_id` to `/api/ha/status` | Low | HA `unique_id` stability across host changes |
+| 4 | New `GET /api/ha/search/semantic` embedding-based endpoint | Medium | Card "Smart matches" actually being smart; voice queries that don't share substrings with indexed text |
+
+**Status (2026-05-05):** issues 1, 2, 3 shipped and verified end-to-end against the HA integration's Phase 0–3 surface. Issue 4 is open.
 
 ---
 
@@ -170,6 +173,110 @@ on first boot, never rotate.
 
 ---
 
+## Issue 4 — Embedding-based `/api/ha/search/semantic` endpoint
+
+**Where:** new route in `backend/app/api/homeassistant.py`, alongside the
+existing `search_items`. Reuses whatever embedding pipeline already
+backs StorageHub's web UI semantic search.
+
+**Problem:** PLAN.md and BACKEND_REQUIREMENTS.md repeatedly call
+`/api/ha/search` "semantic," but it's actually multi-token substring
+matching across `name`, `description`, `ai_names`, `ai_descriptions`,
+and `owner.name` (issue 1). It can't bridge synonyms or cross-language
+meaning.
+
+Concrete failure on the deployed instance (`http://192.168.200.13`,
+2026-05-05):
+
+```bash
+curl -H "X-API-Key: shub_..." "$B/api/ha/search?q=genser"
+# → {"items":[],"total_count":0,...}
+```
+
+But the StorageHub web UI returns "Hvit Oasis Cardigan" for the same
+query — Norwegian *genser* (sweater/jumper) maps semantically to
+*cardigan* via the embedding pipeline. The HA card's "Smart matches"
+section sits below the lite-index local hits expecting *exactly*
+this kind of fallback (where local substring missed but the semantic
+layer fills in). Today it never adds anything beyond what local
+already found.
+
+**Suggested API:**
+
+```
+GET /api/ha/search/semantic?q=<text>&limit=N
+Headers:
+  X-API-Key: shub_...
+
+Response 200 OK:
+{
+  "items": [<ItemSummary>, ...],
+  "total_count": int,
+  "query": "<echoed>"
+}
+```
+
+Same response shape as `/api/ha/search` — the HA integration already
+has a `SearchResult` dataclass. Drop-in compatible.
+
+**Suggested behavior:**
+
+1. **Embedding-based ranking.** Embed the query with the same model
+   StorageHub uses to embed `ai_names` / `ai_descriptions`. Return
+   top-N items by similarity. A modest similarity floor (e.g. cosine
+   ≥ 0.35, tunable) keeps "I couldn't find anything close" from
+   surfacing nonsense.
+2. **Owner-aware filtering, same as issue 1.** Reuse the tokenizer
+   from `search_items` to extract candidate owner-name tokens
+   (English `'s`, Norwegian possessive `s` ≥ 4 chars). If any token
+   matches a `User.name` (substring, case-insensitive), filter
+   results to that user before semantic ranking. Without this, voice
+   queries like *"Hvor er Sverres ullgenser"* would return any
+   sweater in the household, not Sverre's. The lexical owner filter
+   is cheap; layering it under semantic ranking is the right order.
+3. **Empty-token / very-short query.** Return `{"items": [], ...}`
+   without raising. The HA integration enforces ≥ 2 chars at the
+   service layer, but defensive parity matches issue 1's contract.
+4. **Required scope:** `search` (same as `/api/ha/search`).
+
+**Why a separate endpoint over a flag on `/api/ha/search`:**
+
+- Embedding lookup has a different perf profile than substring
+  matching (typically vector index, possibly remote inference).
+  Keeping the cheap path cheap means the as-you-type local
+  fallback in `/api/ha/search` (debounced, called once per pause)
+  doesn't get accidentally upgraded to the heavy path.
+- Result ordering is fundamentally different: substring counts
+  matches, semantic scores similarity. Mixing them in one endpoint
+  forces awkward "which sort?" decisions.
+- Callers can choose: voice uses semantic for the broadest
+  understanding; the card uses it only for the post-debounce "Smart
+  matches" merge.
+
+**Acceptance criteria:**
+
+- `GET /api/ha/search/semantic?q=genser` on the test instance
+  returns *Hvit Oasis Cardigan* (and any other knit-tops) even
+  though no field on those items literally contains "genser".
+- `GET /api/ha/search/semantic?q=Sverre+genser` returns only
+  Sverre's knit tops, not the household's. (Owner pre-filter.)
+- `GET /api/ha/search/semantic?q=Sverres+genser` (Norwegian
+  possessive) behaves the same as the previous query.
+- Returns within the same latency envelope as `/api/ha/search` for
+  reasonable inventories (the card debounces 400ms, voice tolerates
+  ~1s — beyond that we'd have to surface a "thinking…" indicator).
+- 401/403 if API key lacks `search` scope.
+- Empty-or-no-match returns 200 with `{"items": [], "total_count": 0}`.
+
+**Implementation note (not blocking acceptance):** if the embedding
+pipeline isn't currently wired into a queryable index, a pragmatic
+first cut is to compute query embeddings on the fly and brute-force
+cosine against all item embeddings. For the inventory sizes we're
+designing for (≤ 10k items per household), brute force is fine; a
+proper vector index can come later.
+
+---
+
 ## What's intentionally NOT on this list
 
 - **Triage / outgrown / owner-suggestion endpoints in `/api/ha/*`.**
@@ -205,4 +312,9 @@ curl -H "X-API-Key: shub_..." -H 'If-None-Match: "<etag>"' \
 curl -H "X-API-Key: shub_..." \
      "http://storagehub.local/api/ha/search?q=Sverre+jakke"
 # → only Sverre's jackets, not the household's
+
+# Issue 4
+curl -H "X-API-Key: shub_..." \
+     "http://storagehub.local/api/ha/search/semantic?q=genser"
+# → cardigans / knit tops, even though no field contains "genser"
 ```

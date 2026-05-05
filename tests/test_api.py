@@ -161,6 +161,29 @@ async def test_search_invalid_auth(
         await _client(hass).async_search("Sverre")
 
 
+async def test_semantic_search_passes_query_and_limit(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    aioclient_mock.get(
+        f"{HOST}/api/ha/search/semantic",
+        json={"items": [], "total_count": 0, "query": "genser"},
+    )
+    await _client(hass).async_semantic_search("genser", limit=10)
+
+    request = aioclient_mock.mock_calls[-1]
+    url: URL = request[1]
+    assert url.query["q"] == "genser"
+    assert url.query["limit"] == "10"
+
+
+async def test_semantic_search_invalid_auth(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    aioclient_mock.get(f"{HOST}/api/ha/search/semantic", status=401)
+    with pytest.raises(InvalidAuth):
+        await _client(hass).async_semantic_search("genser")
+
+
 _INDEX_BODY = [
     {
         "id": "abc",

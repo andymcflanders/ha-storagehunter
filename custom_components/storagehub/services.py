@@ -26,6 +26,7 @@ from .api import (
 from .const import DOMAIN
 
 SERVICE_SEARCH = "search"
+SERVICE_SEMANTIC_SEARCH = "semantic_search"
 SERVICE_SEARCH_LITE = "search_lite"
 SERVICE_REFRESH_INDEX = "refresh_index"
 
@@ -45,38 +46,48 @@ async def async_register_services(hass: HomeAssistant) -> None:
     if hass.services.has_service(DOMAIN, SERVICE_SEARCH):
         return
 
-    async def _handle_search(call: ServiceCall) -> ServiceResponse:
-        data = _resolve_runtime_data(hass)
-        query = call.data["query"]
-        limit = call.data["limit"]
+    def _build_search_handler(
+        method_name: str,
+    ):
+        async def _handle(call: ServiceCall) -> ServiceResponse:
+            data = _resolve_runtime_data(hass)
+            method = getattr(data.client, method_name)
+            try:
+                result = await method(call.data["query"], limit=call.data["limit"])
+            except InvalidAuth as err:
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN, translation_key="auth_failed"
+                ) from err
+            except CannotConnect as err:
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN, translation_key="cannot_connect"
+                ) from err
+            except StorageHubError as err:
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="api_error",
+                    translation_placeholders={"detail": str(err)},
+                ) from err
+            return {
+                "items": [_serialize_item(item) for item in result.items],
+                "total_count": result.total_count,
+                "query": result.query,
+            }
 
-        try:
-            result = await data.client.async_search(query, limit=limit)
-        except InvalidAuth as err:
-            raise HomeAssistantError(
-                translation_domain=DOMAIN, translation_key="auth_failed"
-            ) from err
-        except CannotConnect as err:
-            raise HomeAssistantError(
-                translation_domain=DOMAIN, translation_key="cannot_connect"
-            ) from err
-        except StorageHubError as err:
-            raise HomeAssistantError(
-                translation_domain=DOMAIN,
-                translation_key="api_error",
-                translation_placeholders={"detail": str(err)},
-            ) from err
-
-        return {
-            "items": [_serialize_item(item) for item in result.items],
-            "total_count": result.total_count,
-            "query": result.query,
-        }
+        return _handle
 
     hass.services.async_register(
         DOMAIN,
         SERVICE_SEARCH,
-        _handle_search,
+        _build_search_handler("async_search"),
+        schema=_SEARCH_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SEMANTIC_SEARCH,
+        _build_search_handler("async_semantic_search"),
         schema=_SEARCH_SCHEMA,
         supports_response=SupportsResponse.ONLY,
     )
